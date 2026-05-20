@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#101820">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Vision Planner">
+    <title>Vision Planner</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">VP</span>
+          <div>
+            <h1>Vision Planner</h1>
+            <p id="rangeLabel">Calendar</p>
+          </div>
+        </div>
+
+        <div class="top-actions">
+          <label class="search-field">
+            <span class="sr-only">Cautare</span>
+            <input id="searchInput" type="search" placeholder="Cauta task, membru, detaliu">
+          </label>
+
+          <label class="compact-field">
+            <span>Prioritate</span>
+            <select id="priorityFilter">
+              <option value="">Toate</option>
+              <option value="critica">Critica</option>
+              <option value="mare">Mare</option>
+              <option value="medie">Medie</option>
+              <option value="mica">Mica</option>
+            </select>
+          </label>
+
+          <label class="compact-field">
+            <span>Responsabil</span>
+            <select id="memberFilter">
+              <option value="">Toti</option>
+            </select>
+          </label>
+
+          <div class="segmented" role="tablist" aria-label="Vizualizare">
+            <button class="tab-button is-active" type="button" data-view="gantt">Gantt</button>
+            <button class="tab-button" type="button" data-view="calendar">Calendar</button>
+            <button class="tab-button" type="button" data-view="team">Echipa</button>
+          </div>
+
+          <button id="installButton" class="secondary-button install-button" type="button" hidden>Instaleaza</button>
+          <button id="newTaskButton" class="primary-button" type="button">Task nou</button>
+        </div>
+      </header>
+
+      <main class="workspace-layout">
+        <aside class="editor-panel">
+          <form id="taskForm" class="task-form">
+            <div class="form-head">
+              <div>
+                <h2 id="formTitle">Task nou</h2>
+                <p id="formMode">Planificare</p>
+              </div>
+              <button id="clearSelectionButton" class="icon-button" type="button" title="Curata selectia" aria-label="Curata selectia">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            <input id="taskId" type="hidden">
+
+            <label>
+              <span>Titlu</span>
+              <input id="titleInput" name="title" type="text" required maxlength="80">
+            </label>
+
+            <div class="form-grid">
+              <label>
+                <span>Start</span>
+                <input id="startInput" name="startDate" type="date" required>
+              </label>
+              <label>
+                <span>Deadline</span>
+                <input id="deadlineInput" name="deadline" type="date" required>
+              </label>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                <span>Prioritate</span>
+                <select id="priorityInput" name="priority">
+                  <option value="critica">Critica</option>
+                  <option value="mare">Mare</option>
+                  <option value="medie">Medie</option>
+                  <option value="mica">Mica</option>
+                </select>
+              </label>
+              <label>
+                <span>Status</span>
+                <select id="statusInput" name="status">
+                  <option value="planificat">Planificat</option>
+                  <option value="in-lucru">In lucru</option>
+                  <option value="finalizat">Finalizat</option>
+                  <option value="blocat">Blocat</option>
+                </select>
+              </label>
+            </div>
+
+            <label>
+              <span>Responsabil</span>
+              <input id="assigneeInput" name="assignee" type="text" list="memberList" maxlength="60">
+              <datalist id="memberList"></datalist>
+            </label>
+
+            <div class="form-grid">
+              <label>
+                <span>Membri</span>
+                <input id="participantsInput" name="participants" type="number" min="0" step="1">
+              </label>
+              <label>
+                <span>Buget</span>
+                <input id="budgetInput" name="budget" type="number" min="0" step="50">
+              </label>
+            </div>
+
+            <label>
+              <span>Detalii</span>
+              <textarea id="descriptionInput" name="description" rows="4"></textarea>
+            </label>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Salveaza</button>
+              <button id="deleteTaskButton" class="danger-button" type="button">Sterge</button>
+            </div>
+          </form>
+
+          <section class="team-editor">
+            <h2>Membru nou</h2>
+            <form id="memberForm" class="member-form">
+              <label>
+                <span>Nume</span>
+                <input id="memberNameInput" type="text" maxlength="60">
+              </label>
+              <label>
+                <span>Rol</span>
+                <input id="memberRoleInput" type="text" maxlength="60">
+              </label>
+              <button class="secondary-button" type="submit">Adauga</button>
+            </form>
+          </section>
+        </aside>
+
+        <section class="main-panel">
+          <div id="message" class="message" aria-live="polite"></div>
+
+          <section id="summaryStrip" class="summary-strip" aria-label="Rezumat"></section>
+
+          <section id="ganttView" class="view-panel is-visible">
+            <div class="panel-toolbar">
+              <div>
+                <h2>Planificare Gantt</h2>
+                <p id="ganttCount">0 taskuri</p>
+              </div>
+              <div class="panel-tools">
+                <label class="compact-field">
+                  <span>Luna</span>
+                  <input id="monthInput" type="month">
+                </label>
+                <label class="compact-field">
+                  <span>Sortare</span>
+                  <select id="sortInput">
+                    <option value="calendar">Calendar</option>
+                    <option value="priority">Prioritate</option>
+                    <option value="budget">Buget</option>
+                    <option value="participants">Membri</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div id="ganttChart" class="gantt-chart" aria-label="Gantt"></div>
+          </section>
+
+          <section id="calendarView" class="view-panel">
+            <div class="panel-toolbar">
+              <div>
+                <h2>Calendar deadlineuri</h2>
+                <p id="calendarCount">0 intrari</p>
+              </div>
+            </div>
+            <div id="calendarGrid" class="calendar-grid" aria-label="Calendar"></div>
+          </section>
+
+          <section id="teamView" class="view-panel">
+            <div class="panel-toolbar">
+              <div>
+                <h2>Alocare echipa</h2>
+                <p id="teamCount">0 membri</p>
+              </div>
+            </div>
+            <div id="teamBoard" class="team-board" aria-label="Echipa"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>

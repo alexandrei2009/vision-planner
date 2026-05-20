@@ -1,0 +1,15 @@
+{
+  "name": "vision-planner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Organizator de evenimente cu Gantt, calendar, echipa, prioritati si bugete.",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js && node --check scripts/generate-icons.js",
+    "generate:icons": "node scripts/generate-icons.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

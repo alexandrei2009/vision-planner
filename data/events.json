@@ -1,0 +1,86 @@
+{
+  "members": [
+    {
+      "id": "member-andrei",
+      "name": "Andrei Ionescu",
+      "role": "Logistica"
+    },
+    {
+      "id": "member-ioana",
+      "name": "Ioana Pop",
+      "role": "Coordonare"
+    },
+    {
+      "id": "member-mara",
+      "name": "Mara Stan",
+      "role": "Design"
+    },
+    {
+      "id": "member-victor",
+      "name": "Victor Ene",
+      "role": "Financiar"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-concept",
+      "title": "Concept eveniment",
+      "description": "Stabilire tema, public tinta si obiective.",
+      "startDate": "2026-05-20",
+      "deadline": "2026-05-24",
+      "participants": 4,
+      "budget": 1200,
+      "priority": "mare",
+      "assignee": "Ioana Pop",
+      "status": "in-lucru"
+    },
+    {
+      "id": "task-locatie",
+      "title": "Rezervare locatie",
+      "description": "Confirmare sala, program si costuri.",
+      "startDate": "2026-05-22",
+      "deadline": "2026-05-29",
+      "participants": 2,
+      "budget": 4500,
+      "priority": "critica",
+      "assignee": "Andrei Ionescu",
+      "status": "planificat"
+    },
+    {
+      "id": "task-vizual",
+      "title": "Materiale vizuale",
+      "description": "Afise, program si continut pentru social media.",
+      "startDate": "2026-05-25",
+      "deadline": "2026-06-03",
+      "participants": 3,
+      "budget": 1800,
+      "priority": "medie",
+      "assignee": "Mara Stan",
+      "status": "planificat"
+    },
+    {
+      "id": "task-furnizori",
+      "title": "Confirmare furnizori",
+      "description": "Sunet, lumini, catering si transport.",
+      "startDate": "2026-05-30",
+      "deadline": "2026-06-07",
+      "participants": 2,
+      "budget": 6200,
+      "priority": "mare",
+      "assignee": "Victor Ene",
+      "status": "planificat"
+    },
+    {
+      "id": "task-eveniment",
+      "title": "Ziua evenimentului",
+      "description": "Coordonare acces, program si echipe pe teren.",
+      "startDate": "2026-06-10",
+      "deadline": "2026-06-10",
+      "participants": 10,
+      "budget": 3000,
+      "priority": "critica",
+      "assignee": "Ioana Pop",
+      "status": "planificat"
+    }
+  ]
+}
