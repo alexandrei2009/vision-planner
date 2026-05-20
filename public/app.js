@@ -13,6 +13,13 @@ const priorityLabels = {
   mica: "Mica",
 };
 
+const priorityShortLabels = {
+  critica: "C",
+  mare: "Ma",
+  medie: "M",
+  mica: "Mi",
+};
+
 const statusLabels = {
   planificat: "Planificat",
   "in-lucru": "In lucru",
@@ -318,11 +325,13 @@ function renderGantt() {
     const duration = Math.max(1, daysBetween(task.startDate, task.deadline) + 1);
     const bar = document.createElement("button");
     bar.type = "button";
-    bar.className = `gantt-bar priority-${task.priority}${state.selectedId === task.id ? " is-selected" : ""}`;
+    const isCompactBar = duration <= 2;
+    bar.className = `gantt-bar priority-${task.priority}${isCompactBar ? " is-compact" : ""}${state.selectedId === task.id ? " is-selected" : ""}`;
     bar.style.gridColumn = `${startOffset + 2} / span ${duration}`;
     bar.style.gridRow = "1";
-    bar.innerHTML = `<span>${escapeHtml(priorityLabels[task.priority])} - ${escapeHtml(statusLabels[task.status])}</span>`;
-    bar.title = `${task.title} - ${task.startDate} - ${task.deadline}`;
+    bar.setAttribute("aria-label", `${task.title} - ${priorityLabels[task.priority]} - ${statusLabels[task.status]}`);
+    bar.innerHTML = `<span>${escapeHtml(isCompactBar ? priorityShortLabels[task.priority] : `${priorityLabels[task.priority]} - ${statusLabels[task.status]}`)}</span>`;
+    bar.title = `${task.title} - ${priorityLabels[task.priority]} - ${statusLabels[task.status]} - ${task.startDate} - ${task.deadline}`;
     bar.addEventListener("click", () => selectTask(task.id));
     row.append(bar);
 

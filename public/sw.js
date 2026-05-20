@@ -1,9 +1,9 @@
-const CACHE_NAME = "vision-planner-v1";
+const CACHE_NAME = "vision-planner-v2";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
-  "/styles.css",
-  "/app.js",
+  "/styles.css?v=2",
+  "/app.js?v=2",
   "/manifest.webmanifest",
   "/icons/icon.svg",
   "/icons/icon-192.png",
@@ -43,7 +43,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (event.request.method !== "GET") {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request)),
+    caches.open(CACHE_NAME).then(async (cache) => {
+      try {
+        const response = await fetch(event.request);
+        if (response.ok) {
+          cache.put(event.request, response.clone());
+        }
+        return response;
+      } catch {
+        return caches.match(event.request);
+      }
+    }),
   );
 });

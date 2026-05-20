@@ -537,6 +537,9 @@ button {
 .gantt-bar {
   position: relative;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   align-self: center;
   min-height: 30px;
   margin: 0 4px;
@@ -549,6 +552,13 @@ button {
   box-shadow: 0 8px 18px rgba(27, 31, 35, 0.18);
 }
 
+.gantt-bar.is-compact {
+  justify-content: center;
+  min-width: 30px;
+  padding: 0;
+  text-align: center;
+}
+
 .gantt-bar span {
   display: block;
   overflow: hidden;
@@ -556,6 +566,11 @@ button {
   white-space: nowrap;
   font-size: 0.78rem;
   font-weight: 900;
+}
+
+.gantt-bar.is-compact span {
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .gantt-bar.is-selected {
