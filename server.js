@@ -8,6 +8,7 @@ const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, "public");
 const DATA_DIR = path.join(ROOT_DIR, "data");
 const DATA_FILE = path.join(DATA_DIR, "events.json");
+const USE_DATABASE = Boolean(process.env.DATABASE_URL);
 
 const PRIORITIES = ["critica", "mare", "medie", "mica"];
 const STATUSES = ["planificat", "in-lucru", "finalizat", "blocat"];
@@ -28,6 +29,9 @@ const MIME_TYPES = {
   ".png": "image/png",
   ".ico": "image/x-icon",
 };
+
+let pgPool;
+let databaseReady = false;
 
 function addDays(date, days) {
   const copy = new Date(date);
@@ -125,6 +129,23 @@ function makeError(status, message) {
 }
 
 async function readState() {
+  if (USE_DATABASE) {
+    return readDatabaseState();
+  }
+
+  return readJsonState();
+}
+
+async function writeState(state) {
+  if (USE_DATABASE) {
+    await writeDatabaseState(state);
+    return;
+  }
+
+  await writeJsonState(state);
+}
+
+async function readJsonState(seedIfMissing = true) {
   try {
     const raw = await fs.readFile(DATA_FILE, "utf8");
     const parsed = JSON.parse(raw);
@@ -137,19 +158,227 @@ async function readState() {
       throw error;
     }
 
+    if (!seedIfMissing) {
+      throw error;
+    }
+
     const seed = createSeedState();
-    await writeState(seed);
+    await writeJsonState(seed);
     return seed;
   }
 }
 
-async function writeState(state) {
+async function writeJsonState(state) {
   await fs.mkdir(DATA_DIR, { recursive: true });
   const sortedState = {
     members: state.members.map(normalizeMember).sort((a, b) => a.name.localeCompare(b.name)),
     tasks: sortTasksCalendar(state.tasks.map(normalizeTaskForStorage)),
   };
   await fs.writeFile(DATA_FILE, `${JSON.stringify(sortedState, null, 2)}\n`, "utf8");
+}
+
+function shouldUseSsl(connectionString) {
+  if (process.env.PGSSLMODE === "disable") {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(connectionString);
+    const hostname = parsed.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+      return false;
+    }
+  } catch {
+    return process.env.NODE_ENV === "production";
+  }
+
+  return process.env.NODE_ENV === "production" || process.env.RENDER === "true";
+}
+
+function getDatabasePool() {
+  if (pgPool) {
+    return pgPool;
+  }
+
+  let Pool;
+  try {
+    ({ Pool } = require("pg"));
+  } catch (error) {
+    throw new Error("Lipseste dependenta 'pg'. Ruleaza npm install sau redeploy pe Render.");
+  }
+
+  pgPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: 5,
+    ssl: shouldUseSsl(process.env.DATABASE_URL) ? { rejectUnauthorized: false } : false,
+  });
+
+  return pgPool;
+}
+
+async function ensureDatabase() {
+  if (databaseReady) {
+    return;
+  }
+
+  const pool = getDatabasePool();
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS members (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      role TEXT NOT NULL DEFAULT ''
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      start_date DATE NOT NULL,
+      deadline DATE NOT NULL,
+      participants INTEGER NOT NULL DEFAULT 0 CHECK (participants >= 0),
+      budget NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (budget >= 0),
+      priority TEXT NOT NULL CHECK (priority IN ('critica', 'mare', 'medie', 'mica')),
+      assignee TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL CHECK (status IN ('planificat', 'in-lucru', 'finalizat', 'blocat')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_tasks_dates ON tasks (start_date, deadline);");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks (assignee);");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks (priority);");
+
+  const countResult = await pool.query(`
+    SELECT
+      (SELECT COUNT(*)::int FROM members) AS members,
+      (SELECT COUNT(*)::int FROM tasks) AS tasks;
+  `);
+
+  const counts = countResult.rows[0] || { members: 0, tasks: 0 };
+  if (counts.members === 0 && counts.tasks === 0) {
+    let seed;
+    try {
+      seed = await readJsonState(false);
+    } catch {
+      seed = createSeedState();
+    }
+    await writeDatabaseState(seed, { skipEnsure: true });
+  }
+
+  databaseReady = true;
+}
+
+async function readDatabaseState() {
+  await ensureDatabase();
+  const pool = getDatabasePool();
+  const [membersResult, tasksResult] = await Promise.all([
+    pool.query("SELECT id, name, role FROM members ORDER BY name ASC;"),
+    pool.query(`
+      SELECT
+        id,
+        title,
+        description,
+        start_date::text AS "startDate",
+        deadline::text AS deadline,
+        participants,
+        budget::float AS budget,
+        priority,
+        assignee,
+        status
+      FROM tasks
+      ORDER BY start_date ASC, deadline ASC, title ASC;
+    `),
+  ]);
+
+  return {
+    members: membersResult.rows.map(normalizeMember),
+    tasks: tasksResult.rows.map(normalizeTaskForStorage),
+  };
+}
+
+async function writeDatabaseState(state, options = {}) {
+  if (!options.skipEnsure) {
+    await ensureDatabase();
+  }
+
+  const pool = getDatabasePool();
+  const client = await pool.connect();
+  const members = state.members.map(normalizeMember).filter((member) => member.name);
+  const tasks = sortTasksCalendar(state.tasks.map(normalizeTaskForStorage));
+
+  try {
+    await client.query("BEGIN");
+    await client.query("DELETE FROM tasks;");
+    await client.query("DELETE FROM members;");
+
+    for (const member of members) {
+      await client.query(
+        `
+          INSERT INTO members (id, name, role)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (id) DO UPDATE
+          SET name = EXCLUDED.name,
+              role = EXCLUDED.role;
+        `,
+        [member.id, member.name, member.role],
+      );
+    }
+
+    for (const task of tasks) {
+      await client.query(
+        `
+          INSERT INTO tasks (
+            id,
+            title,
+            description,
+            start_date,
+            deadline,
+            participants,
+            budget,
+            priority,
+            assignee,
+            status,
+            updated_at
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+          ON CONFLICT (id) DO UPDATE
+          SET title = EXCLUDED.title,
+              description = EXCLUDED.description,
+              start_date = EXCLUDED.start_date,
+              deadline = EXCLUDED.deadline,
+              participants = EXCLUDED.participants,
+              budget = EXCLUDED.budget,
+              priority = EXCLUDED.priority,
+              assignee = EXCLUDED.assignee,
+              status = EXCLUDED.status,
+              updated_at = NOW();
+        `,
+        [
+          task.id,
+          task.title,
+          task.description,
+          task.startDate,
+          task.deadline,
+          task.participants,
+          task.budget,
+          task.priority,
+          task.assignee,
+          task.status,
+        ],
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function normalizeMember(member) {

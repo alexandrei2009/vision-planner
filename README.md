@@ -24,10 +24,13 @@ Setari principale:
 - Start Command: `npm start`
 - Health Check Path: `/healthz`
 
+Blueprint-ul creeaza si o baza de date PostgreSQL `vision-planner-db`, apoi seteaza automat `DATABASE_URL` pentru serviciul web.
+
 ## Ce include
 
-- backend JavaScript fara dependinte externe
+- backend JavaScript pe Node.js
+- persistenta PostgreSQL pe Render, cu fallback JSON local
 - API REST pentru taskuri si membri
-- persistenta in `data/events.json`
+- persistenta locala in `data/events.json`
 - vizualizare Gantt, calendar si alocare pe echipa
 - prioritati, deadlineuri, bugete, participanti si statusuri

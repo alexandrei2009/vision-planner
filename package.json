@@ -9,6 +9,9 @@
     "check": "node --check server.js && node --check public/app.js && node --check scripts/generate-icons.js",
     "generate:icons": "node scripts/generate-icons.js"
   },
+  "dependencies": {
+    "pg": "^8.16.0"
+  },
   "engines": {
     "node": ">=20"
   }
