@@ -1,9 +1,9 @@
-const CACHE_NAME = "vision-planner-v2";
+const CACHE_NAME = "vision-planner-v4";
 const STATIC_ASSETS = [
   "/",
   "/index.html",
-  "/styles.css?v=2",
-  "/app.js?v=2",
+  "/styles.css?v=4",
+  "/app.js?v=4",
   "/manifest.webmanifest",
   "/icons/icon.svg",
   "/icons/icon-192.png",

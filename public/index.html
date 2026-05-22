@@ -10,10 +10,65 @@
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/icons/icon-192.png">
-    <link rel="stylesheet" href="/styles.css?v=2">
+    <link rel="stylesheet" href="/styles.css?v=4">
   </head>
   <body>
-    <div class="app-shell">
+    <section id="authScreen" class="auth-screen">
+      <div class="auth-panel">
+        <div class="auth-brand">
+          <span class="brand-mark" aria-hidden="true">VP</span>
+          <div>
+            <h1>Vision Planner</h1>
+            <p>Conturi, echipe si planificare colaborativa</p>
+          </div>
+        </div>
+
+        <div class="auth-tabs" role="tablist" aria-label="Autentificare">
+          <button id="loginTab" class="tab-button is-active" type="button">Login</button>
+          <button id="registerTab" class="tab-button" type="button">Cont nou</button>
+        </div>
+
+        <div id="authMessage" class="message" aria-live="polite"></div>
+
+        <form id="loginForm" class="auth-form">
+          <label>
+            <span>Email</span>
+            <input id="loginEmailInput" type="email" autocomplete="email" required>
+          </label>
+          <label>
+            <span>Parola</span>
+            <input id="loginPasswordInput" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="primary-button" type="submit">Intra in cont</button>
+        </form>
+
+        <form id="registerForm" class="auth-form is-hidden">
+          <label>
+            <span>Nume</span>
+            <input id="registerNameInput" type="text" autocomplete="name" required>
+          </label>
+          <label>
+            <span>Email</span>
+            <input id="registerEmailInput" type="email" autocomplete="email" required>
+          </label>
+          <label>
+            <span>Parola</span>
+            <input id="registerPasswordInput" type="password" autocomplete="new-password" minlength="8" required>
+          </label>
+          <label>
+            <span>Numele echipei</span>
+            <input id="registerTeamInput" type="text" placeholder="ex. Echipa InfoEducatie">
+          </label>
+          <label>
+            <span>Cod invitatie</span>
+            <input id="registerInviteInput" type="text" placeholder="optional">
+          </label>
+          <button class="primary-button" type="submit">Creeaza cont</button>
+        </form>
+      </div>
+    </section>
+
+    <div id="appShell" class="app-shell is-hidden">
       <header class="topbar">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">VP</span>
@@ -24,6 +79,11 @@
         </div>
 
         <div class="top-actions">
+          <label class="compact-field team-switcher">
+            <span>Echipa</span>
+            <select id="teamSelect"></select>
+          </label>
+
           <label class="search-field">
             <span class="sr-only">Cautare</span>
             <input id="searchInput" type="search" placeholder="Cauta task, membru, detaliu">
@@ -54,6 +114,8 @@
           </div>
 
           <button id="installButton" class="secondary-button install-button" type="button" hidden>Instaleaza</button>
+          <button id="notificationButton" class="secondary-button notification-button" type="button">Notificari <span id="notificationCount">0</span></button>
+          <button id="logoutButton" class="secondary-button" type="button">Logout</button>
           <button id="newTaskButton" class="primary-button" type="button">Task nou</button>
         </div>
       </header>
@@ -114,8 +176,9 @@
 
             <label>
               <span>Responsabil</span>
-              <input id="assigneeInput" name="assignee" type="text" list="memberList" maxlength="60">
-              <datalist id="memberList"></datalist>
+              <select id="assigneeInput" name="assignee">
+                <option value="">Nealocat</option>
+              </select>
             </label>
 
             <div class="form-grid">
@@ -136,22 +199,42 @@
 
             <div class="form-actions">
               <button class="primary-button" type="submit">Salveaza</button>
+              <button id="aiButton" class="secondary-button" type="button">AI</button>
               <button id="deleteTaskButton" class="danger-button" type="button">Sterge</button>
             </div>
           </form>
 
+          <section id="aiPanel" class="ai-panel is-hidden">
+            <div class="form-head">
+              <div>
+                <h2>AI subtaskuri</h2>
+                <p id="aiProvider">Asistent planificare</p>
+              </div>
+            </div>
+            <div id="aiResults" class="ai-results"></div>
+            <button id="createAiTasksButton" class="secondary-button" type="button" disabled>Creeaza subtaskurile</button>
+          </section>
+
           <section class="team-editor">
-            <h2>Membru nou</h2>
-            <form id="memberForm" class="member-form">
+            <h2>Echipa</h2>
+            <form id="teamForm" class="member-form">
               <label>
-                <span>Nume</span>
-                <input id="memberNameInput" type="text" maxlength="60">
+                <span>Nume echipa</span>
+                <input id="teamNameInput" type="text" maxlength="80">
               </label>
+              <button class="secondary-button" type="submit">Salveaza nume</button>
+            </form>
+            <div class="invite-box">
+              <span>Cod invitatie</span>
+              <strong id="inviteCodeText">-</strong>
+              <button id="copyInviteButton" class="secondary-button" type="button">Copiaza</button>
+            </div>
+            <form id="joinTeamForm" class="member-form">
               <label>
-                <span>Rol</span>
-                <input id="memberRoleInput" type="text" maxlength="60">
+                <span>Alatura-te unei echipe</span>
+                <input id="joinCodeInput" type="text" maxlength="20" placeholder="Cod invitatie">
               </label>
-              <button class="secondary-button" type="submit">Adauga</button>
+              <button class="secondary-button" type="submit">Intra in echipa</button>
             </form>
           </section>
         </aside>
@@ -207,8 +290,16 @@
           </section>
         </section>
       </main>
+
+      <aside id="notificationPanel" class="notification-panel is-hidden">
+        <div class="notification-head">
+          <h2>Notificari</h2>
+          <button id="markAllReadButton" class="secondary-button" type="button">Citite</button>
+        </div>
+        <div id="notificationList" class="notification-list"></div>
+      </aside>
     </div>
 
-    <script src="/app.js?v=2" defer></script>
+    <script src="/app.js?v=4" defer></script>
   </body>
 </html>

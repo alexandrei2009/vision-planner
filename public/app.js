@@ -1,6 +1,11 @@
 const state = {
+  user: null,
+  teams: [],
+  activeTeamId: "",
   tasks: [],
   members: [],
+  notifications: [],
+  aiSuggestions: [],
   summary: null,
   selectedId: "",
   view: "gantt",
@@ -36,6 +41,21 @@ const moneyFormatter = new Intl.NumberFormat("ro-RO", {
 });
 
 const elements = {
+  authScreen: document.querySelector("#authScreen"),
+  appShell: document.querySelector("#appShell"),
+  loginTab: document.querySelector("#loginTab"),
+  registerTab: document.querySelector("#registerTab"),
+  loginForm: document.querySelector("#loginForm"),
+  registerForm: document.querySelector("#registerForm"),
+  loginEmailInput: document.querySelector("#loginEmailInput"),
+  loginPasswordInput: document.querySelector("#loginPasswordInput"),
+  registerNameInput: document.querySelector("#registerNameInput"),
+  registerEmailInput: document.querySelector("#registerEmailInput"),
+  registerPasswordInput: document.querySelector("#registerPasswordInput"),
+  registerTeamInput: document.querySelector("#registerTeamInput"),
+  registerInviteInput: document.querySelector("#registerInviteInput"),
+  authMessage: document.querySelector("#authMessage"),
+  teamSelect: document.querySelector("#teamSelect"),
   searchInput: document.querySelector("#searchInput"),
   priorityFilter: document.querySelector("#priorityFilter"),
   memberFilter: document.querySelector("#memberFilter"),
@@ -60,17 +80,30 @@ const elements = {
   priorityInput: document.querySelector("#priorityInput"),
   statusInput: document.querySelector("#statusInput"),
   assigneeInput: document.querySelector("#assigneeInput"),
-  memberList: document.querySelector("#memberList"),
   participantsInput: document.querySelector("#participantsInput"),
   budgetInput: document.querySelector("#budgetInput"),
   descriptionInput: document.querySelector("#descriptionInput"),
   deleteTaskButton: document.querySelector("#deleteTaskButton"),
+  aiButton: document.querySelector("#aiButton"),
+  aiPanel: document.querySelector("#aiPanel"),
+  aiProvider: document.querySelector("#aiProvider"),
+  aiResults: document.querySelector("#aiResults"),
+  createAiTasksButton: document.querySelector("#createAiTasksButton"),
   newTaskButton: document.querySelector("#newTaskButton"),
   installButton: document.querySelector("#installButton"),
+  notificationButton: document.querySelector("#notificationButton"),
+  notificationCount: document.querySelector("#notificationCount"),
+  notificationPanel: document.querySelector("#notificationPanel"),
+  notificationList: document.querySelector("#notificationList"),
+  markAllReadButton: document.querySelector("#markAllReadButton"),
+  logoutButton: document.querySelector("#logoutButton"),
   clearSelectionButton: document.querySelector("#clearSelectionButton"),
-  memberForm: document.querySelector("#memberForm"),
-  memberNameInput: document.querySelector("#memberNameInput"),
-  memberRoleInput: document.querySelector("#memberRoleInput"),
+  teamForm: document.querySelector("#teamForm"),
+  teamNameInput: document.querySelector("#teamNameInput"),
+  inviteCodeText: document.querySelector("#inviteCodeText"),
+  copyInviteButton: document.querySelector("#copyInviteButton"),
+  joinTeamForm: document.querySelector("#joinTeamForm"),
+  joinCodeInput: document.querySelector("#joinCodeInput"),
 };
 
 let deferredInstallPrompt = null;
@@ -117,8 +150,11 @@ async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: {
       "Content-Type": "application/json",
+      "X-Requested-With": "VisionPlanner",
+      ...(state.activeTeamId ? { "X-Team-Id": state.activeTeamId } : {}),
       ...(options.headers || {}),
     },
+    credentials: "same-origin",
     ...options,
   });
 
@@ -150,52 +186,94 @@ function buildTaskQuery() {
 }
 
 async function loadData() {
-  const [taskPayload, memberPayload] = await Promise.all([
+  const [taskPayload, memberPayload, notificationPayload] = await Promise.all([
     api(`/api/tasks?${buildTaskQuery()}`),
     api("/api/members"),
+    api("/api/notifications"),
   ]);
 
   state.tasks = taskPayload.tasks;
   state.summary = taskPayload.summary;
   state.members = memberPayload.members;
+  state.notifications = notificationPayload.notifications;
+  elements.notificationCount.textContent = notificationPayload.unreadCount;
   render();
 }
 
+async function loadMe() {
+  const payload = await api("/api/me");
+  state.user = payload.user;
+  state.teams = payload.teams;
+  state.activeTeamId = state.activeTeamId || payload.activeTeam?.id || payload.teams[0]?.id || "";
+  showApp();
+}
+
+function showApp() {
+  elements.authScreen.classList.add("is-hidden");
+  elements.appShell.classList.remove("is-hidden");
+}
+
+function showAuth() {
+  elements.appShell.classList.add("is-hidden");
+  elements.authScreen.classList.remove("is-hidden");
+}
+
 function showMessage(text, type = "success") {
-  elements.message.textContent = text;
-  elements.message.classList.toggle("is-error", type === "error");
-  elements.message.classList.add("is-visible");
+  const target = elements.appShell.classList.contains("is-hidden") ? elements.authMessage : elements.message;
+  target.textContent = text;
+  target.classList.toggle("is-error", type === "error");
+  target.classList.add("is-visible");
 
   window.clearTimeout(showMessage.timeout);
   showMessage.timeout = window.setTimeout(() => {
-    elements.message.classList.remove("is-visible", "is-error");
+    target.classList.remove("is-visible", "is-error");
   }, 3200);
 }
 
 function render() {
+  renderTeams();
   renderMemberInputs();
   renderSummary();
   renderGantt();
   renderCalendar();
   renderTeamBoard();
+  renderNotifications();
   updateFormMode();
   updateViews();
+}
+
+function renderTeams() {
+  const activeTeam = state.teams.find((team) => team.id === state.activeTeamId) || state.teams[0];
+  elements.teamSelect.innerHTML = "";
+  for (const team of state.teams) {
+    const option = document.createElement("option");
+    option.value = team.id;
+    option.textContent = team.name;
+    elements.teamSelect.append(option);
+  }
+  if (activeTeam) {
+    state.activeTeamId = activeTeam.id;
+    elements.teamSelect.value = activeTeam.id;
+    elements.teamNameInput.value = activeTeam.name;
+    elements.inviteCodeText.textContent = activeTeam.inviteCode || "-";
+  }
 }
 
 function renderMemberInputs() {
   const selectedFilter = elements.memberFilter.value;
   elements.memberFilter.innerHTML = '<option value="">Toti</option>';
-  elements.memberList.innerHTML = "";
+  elements.assigneeInput.innerHTML = '<option value="">Nealocat</option>';
 
   for (const member of state.members) {
     const option = document.createElement("option");
-    option.value = member.name;
+    option.value = member.id;
     option.textContent = member.name;
     elements.memberFilter.append(option);
 
-    const dataOption = document.createElement("option");
-    dataOption.value = member.name;
-    elements.memberList.append(dataOption);
+    const assigneeOption = document.createElement("option");
+    assigneeOption.value = member.id;
+    assigneeOption.textContent = `${member.name} (${member.email})`;
+    elements.assigneeInput.append(assigneeOption);
   }
 
   elements.memberFilter.value = selectedFilter;
@@ -405,7 +483,7 @@ function renderTeamBoard() {
   }
 
   for (const member of members) {
-    const memberTasks = state.tasks.filter((task) => (member.id === "unassigned" ? !task.assignee : task.assignee === member.name));
+    const memberTasks = state.tasks.filter((task) => (member.id === "unassigned" ? !task.assigneeId : task.assigneeId === member.id));
     const budget = memberTasks.reduce((sum, task) => sum + task.budget, 0);
     const column = document.createElement("article");
     column.className = "member-column";
@@ -425,6 +503,34 @@ function renderTeamBoard() {
     }
 
     elements.teamBoard.append(column);
+  }
+}
+
+function renderNotifications() {
+  elements.notificationList.innerHTML = "";
+
+  if (!state.notifications.length) {
+    elements.notificationList.innerHTML = '<div class="notification-empty">Nu ai notificari.</div>';
+    return;
+  }
+
+  for (const notification of state.notifications) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `notification-item${notification.readAt ? "" : " is-unread"}`;
+    item.innerHTML = `<strong>${escapeHtml(notification.title)}</strong><span>${escapeHtml(notification.body)}</span><small>${new Date(notification.createdAt).toLocaleString("ro-RO")}</small>`;
+    item.addEventListener("click", async () => {
+      try {
+        await api(`/api/notifications/${notification.id}`, { method: "POST" });
+        notification.readAt = new Date().toISOString();
+        renderNotifications();
+        const unread = state.notifications.filter((entry) => !entry.readAt).length;
+        elements.notificationCount.textContent = unread;
+      } catch (error) {
+        showMessage(error.message, "error");
+      }
+    });
+    elements.notificationList.append(item);
   }
 }
 
@@ -454,6 +560,7 @@ function resetForm() {
   elements.deadlineInput.value = today;
   elements.priorityInput.value = "medie";
   elements.statusInput.value = "planificat";
+  elements.assigneeInput.value = "";
   elements.participantsInput.value = 1;
   elements.budgetInput.value = 0;
   updateFormMode();
@@ -473,7 +580,7 @@ function selectTask(id) {
   elements.deadlineInput.value = task.deadline;
   elements.priorityInput.value = task.priority;
   elements.statusInput.value = task.status;
-  elements.assigneeInput.value = task.assignee;
+  elements.assigneeInput.value = task.assigneeId || "";
   elements.participantsInput.value = task.participants;
   elements.budgetInput.value = task.budget;
   elements.descriptionInput.value = task.description;
@@ -488,7 +595,7 @@ function readTaskForm() {
     deadline: elements.deadlineInput.value,
     priority: elements.priorityInput.value,
     status: elements.statusInput.value,
-    assignee: elements.assigneeInput.value.trim(),
+    assigneeId: elements.assigneeInput.value,
     participants: Number(elements.participantsInput.value || 0),
     budget: Number(elements.budgetInput.value || 0),
     description: elements.descriptionInput.value.trim(),
@@ -539,24 +646,169 @@ async function deleteSelectedTask() {
   }
 }
 
-async function addMember(event) {
+async function saveTeamName(event) {
   event.preventDefault();
-  const name = elements.memberNameInput.value.trim();
-  const role = elements.memberRoleInput.value.trim();
+  const name = elements.teamNameInput.value.trim();
 
   if (!name) {
-    showMessage("Numele membrului este obligatoriu.", "error");
+    showMessage("Numele echipei este obligatoriu.", "error");
     return;
   }
 
   try {
-    await api("/api/members", {
-      method: "POST",
-      body: JSON.stringify({ name, role }),
+    const payload = await api(`/api/teams/${state.activeTeamId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
     });
-    elements.memberForm.reset();
+    state.teams = payload.teams;
     await loadData();
-    showMessage("Membru adaugat.");
+    showMessage("Numele echipei a fost salvat.");
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+}
+
+async function joinTeam(event) {
+  event.preventDefault();
+  const inviteCode = elements.joinCodeInput.value.trim();
+  if (!inviteCode) {
+    showMessage("Introdu codul de invitatie.", "error");
+    return;
+  }
+
+  try {
+    const payload = await api("/api/teams/join", {
+      method: "POST",
+      body: JSON.stringify({ inviteCode }),
+    });
+    state.teams = payload.teams;
+    state.activeTeamId = payload.team.id;
+    elements.joinTeamForm.reset();
+    resetForm();
+    await loadData();
+    showMessage("Te-ai alaturat echipei.");
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+}
+
+async function login(event) {
+  event.preventDefault();
+  try {
+    const payload = await api("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: elements.loginEmailInput.value,
+        password: elements.loginPasswordInput.value,
+      }),
+    });
+    state.user = payload.user;
+    state.teams = payload.teams;
+    state.activeTeamId = payload.activeTeam?.id || payload.teams[0]?.id || "";
+    showApp();
+    resetForm();
+    await loadData();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+}
+
+async function register(event) {
+  event.preventDefault();
+  try {
+    const payload = await api("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        name: elements.registerNameInput.value,
+        email: elements.registerEmailInput.value,
+        password: elements.registerPasswordInput.value,
+        teamName: elements.registerTeamInput.value,
+        inviteCode: elements.registerInviteInput.value,
+      }),
+    });
+    state.user = payload.user;
+    state.teams = payload.teams;
+    state.activeTeamId = payload.activeTeam?.id || payload.teams[0]?.id || "";
+    showApp();
+    resetForm();
+    await loadData();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+}
+
+async function logout() {
+  try {
+    await api("/api/auth/logout", { method: "POST" });
+  } catch {
+  }
+  state.user = null;
+  state.teams = [];
+  state.activeTeamId = "";
+  showAuth();
+}
+
+async function generateSubtasks() {
+  const payload = readTaskForm();
+  if (!payload.title) {
+    showMessage("Scrie mai intai titlul taskului.", "error");
+    return;
+  }
+
+  elements.aiPanel.classList.remove("is-hidden");
+  elements.aiResults.innerHTML = '<div class="notification-empty">Generez subtaskuri...</div>';
+  elements.createAiTasksButton.disabled = true;
+
+  try {
+    const result = await api("/api/ai/subtasks", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    state.aiSuggestions = result.subtasks || [];
+    elements.aiProvider.textContent = result.provider === "openai" ? "OpenAI" : "Planificare locala";
+    renderAiSuggestions();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+}
+
+function renderAiSuggestions() {
+  elements.aiResults.innerHTML = "";
+  if (!state.aiSuggestions.length) {
+    elements.aiResults.innerHTML = '<div class="notification-empty">Nu am gasit subtaskuri.</div>';
+    return;
+  }
+
+  for (const subtask of state.aiSuggestions) {
+    const item = document.createElement("article");
+    item.className = "ai-result";
+    item.innerHTML = `<strong>${escapeHtml(subtask.title)}</strong><span>${escapeHtml(subtask.description || "")}</span><small>${escapeHtml(priorityLabels[subtask.priority] || "Medie")} - ${escapeHtml(subtask.deadline || "")}</small>`;
+    elements.aiResults.append(item);
+  }
+  elements.createAiTasksButton.disabled = false;
+}
+
+async function createAiTasks() {
+  if (!state.aiSuggestions.length) {
+    return;
+  }
+
+  try {
+    for (const subtask of state.aiSuggestions) {
+      await api("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          ...subtask,
+          assigneeId: elements.assigneeInput.value,
+          participants: 1,
+          status: "planificat",
+        }),
+      });
+    }
+    state.aiSuggestions = [];
+    elements.aiPanel.classList.add("is-hidden");
+    await loadData();
+    showMessage("Subtaskurile au fost create.");
   } catch (error) {
     showMessage(error.message, "error");
   }
@@ -573,6 +825,25 @@ function escapeHtml(value) {
 
 function bindEvents() {
   const reload = debounce(() => loadData().catch((error) => showMessage(error.message, "error")));
+  elements.loginForm.addEventListener("submit", login);
+  elements.registerForm.addEventListener("submit", register);
+  elements.loginTab.addEventListener("click", () => {
+    elements.loginTab.classList.add("is-active");
+    elements.registerTab.classList.remove("is-active");
+    elements.loginForm.classList.remove("is-hidden");
+    elements.registerForm.classList.add("is-hidden");
+  });
+  elements.registerTab.addEventListener("click", () => {
+    elements.registerTab.classList.add("is-active");
+    elements.loginTab.classList.remove("is-active");
+    elements.registerForm.classList.remove("is-hidden");
+    elements.loginForm.classList.add("is-hidden");
+  });
+  elements.teamSelect.addEventListener("change", async () => {
+    state.activeTeamId = elements.teamSelect.value;
+    resetForm();
+    await loadData();
+  });
   elements.searchInput.addEventListener("input", reload);
   elements.priorityFilter.addEventListener("change", reload);
   elements.memberFilter.addEventListener("change", reload);
@@ -580,9 +851,34 @@ function bindEvents() {
   elements.sortInput.addEventListener("change", reload);
   elements.taskForm.addEventListener("submit", saveTask);
   elements.deleteTaskButton.addEventListener("click", deleteSelectedTask);
-  elements.memberForm.addEventListener("submit", addMember);
+  elements.aiButton.addEventListener("click", generateSubtasks);
+  elements.createAiTasksButton.addEventListener("click", createAiTasks);
+  elements.teamForm.addEventListener("submit", saveTeamName);
+  elements.joinTeamForm.addEventListener("submit", joinTeam);
   elements.newTaskButton.addEventListener("click", resetForm);
   elements.clearSelectionButton.addEventListener("click", resetForm);
+  elements.logoutButton.addEventListener("click", logout);
+  elements.copyInviteButton.addEventListener("click", async () => {
+    const code = elements.inviteCodeText.textContent;
+    await navigator.clipboard.writeText(code);
+    showMessage("Codul de invitatie a fost copiat.");
+  });
+  elements.notificationButton.addEventListener("click", () => {
+    elements.notificationPanel.classList.toggle("is-hidden");
+  });
+  elements.markAllReadButton.addEventListener("click", async () => {
+    try {
+      await api("/api/notifications/read-all", { method: "POST" });
+      state.notifications = state.notifications.map((notification) => ({
+        ...notification,
+        readAt: notification.readAt || new Date().toISOString(),
+      }));
+      elements.notificationCount.textContent = "0";
+      renderNotifications();
+    } catch (error) {
+      showMessage(error.message, "error");
+    }
+  });
 
   elements.installButton.addEventListener("click", async () => {
     if (!deferredInstallPrompt) {
@@ -610,9 +906,10 @@ async function init() {
   bindEvents();
 
   try {
+    await loadMe();
     await loadData();
   } catch (error) {
-    showMessage(error.message, "error");
+    showAuth();
   }
 }
 
